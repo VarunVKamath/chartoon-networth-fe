@@ -20,7 +20,7 @@ import ComplianceCenter from './pages/compliance/ComplianceCenter';
 import { authService } from './services/authService';
 import CaptainMascot from './components/CaptainMascot';
 
-const API_BASE = '/api'; // Proxied by Vite to backend
+const API_BASE = import.meta.env.VITE_API_URL || '/api'; // Configurable URL for production / local fallback
 
 // Axios instance with interceptors
 const api = axios.create({ baseURL: API_BASE });
@@ -46,7 +46,9 @@ function App() {
     loginTime: ''
   });
   const [isCallbackPage, setIsCallbackPage] = useState(
-    window.location.pathname === '/kite-callback' || window.location.search.includes('request_token=')
+    window.location.pathname === '/kite-callback' || 
+    window.location.pathname === '/callback' || 
+    window.location.search.includes('request_token=')
   );
   
   // Dashboard State
@@ -313,7 +315,7 @@ function App() {
               <CaptainMascot pose="happy" size={68} />
               <Box>
                 <Typography variant="h3" sx={{ m: 0, textShadow: '2px 2px 0px #FFFFFF', color: '#1E1E1E', letterSpacing: '1px', lineHeight: 1.1 }}>
-                  Kite Auto-Trader
+                  Chartoon Networth
                 </Typography>
                 <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold" color="text.secondary">
                   9:15 AM Auto Select + Buy • 10:00 AM Auto Exit • SL/Target Protection
