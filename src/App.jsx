@@ -76,13 +76,24 @@ function App() {
         api.get('/trade/history')
       ]);
       
-      setDashboardStatus(statusRes.data.status);
-      setCurrentTrade(statusRes.data.currentTrade);
-      setTradingMode(statusRes.data.mode);
-      setStocksList(stocksRes.data.stocks);
-      setTradeHistory(historyRes.data.history);
+      const statusData = statusRes.data;
+      const stocksData = stocksRes.data;
+      const historyData = historyRes.data;
+      
+      if (!statusData || typeof statusData !== 'object' || 
+          !stocksData || typeof stocksData !== 'object' || 
+          !historyData || typeof historyData !== 'object') {
+        throw new Error('API returned invalid JSON response. Please check your VITE_API_URL environment variable configuration.');
+      }
+      
+      setDashboardStatus(statusData.status || 'WAITING_FOR_MARKET');
+      setCurrentTrade(statusData.currentTrade || null);
+      setTradingMode(statusData.mode || 'PAPER');
+      setStocksList(stocksData.stocks || []);
+      setTradeHistory(historyData.history || []);
     } catch (err) {
       console.error(err);
+      setError(err.message || 'Failed to fetch data from backend API');
     }
   };
 
@@ -98,14 +109,27 @@ function App() {
           api.get('/dashboard/logs')
         ]);
         
-        setDashboardStatus(statusRes.data.status);
-        setCurrentTrade(currentRes.data.trade);
-        setLiveLogs(logsRes.data.logs || []);
+        const statusData = statusRes.data;
+        const currentData = currentRes.data;
+        const logsData = logsRes.data;
+        
+        if (statusData && typeof statusData === 'object') {
+          setDashboardStatus(statusData.status || 'WAITING_FOR_MARKET');
+        }
+        if (currentData && typeof currentData === 'object') {
+          setCurrentTrade(currentData.trade || null);
+        }
+        if (logsData && typeof logsData === 'object') {
+          setLiveLogs(logsData.logs || []);
+        }
         
         // Refresh history occasionally
         if (Math.random() < 0.3) {
           const hist = await api.get('/trade/history');
-          setTradeHistory(hist.data.history);
+          const histData = hist.data;
+          if (histData && typeof histData === 'object') {
+            setTradeHistory(histData.history || []);
+          }
         }
       } catch (e) {
         // silent fail on poll
@@ -119,14 +143,17 @@ function App() {
   const checkKiteStatus = async () => {
     try {
       const data = await authService.status();
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid authentication status response');
+      }
       setAuth({
-        connected: data.connected,
+        connected: !!data.connected,
         userName: data.userName || '',
         userId: data.userId || '',
         loginTime: data.loginTime || ''
       });
-      setKiteConnected(data.connected);
-      setTradingMode(data.mode);
+      setKiteConnected(!!data.connected);
+      setTradingMode(data.mode || 'PAPER');
     } catch (err) {
       setKiteConnected(false);
       setAuth({
@@ -143,14 +170,18 @@ function App() {
   }, []);
 
   const handleAuthSuccess = (session) => {
-    setAuth({
-      connected: true,
-      userName: session.userName || session.user_name || '',
-      userId: session.userId || session.user_id || '',
-      loginTime: session.loginTime || new Date().toISOString()
-    });
-    setKiteConnected(true);
-    setSuccess('Kite session activated successfully! You are now connected.');
+    if (session && typeof session === 'object') {
+      setAuth({
+        connected: true,
+        userName: session.userName || session.user_name || '',
+        userId: session.userId || session.user_id || '',
+        loginTime: session.loginTime || new Date().toISOString()
+      });
+      setKiteConnected(true);
+      setSuccess('Kite session activated successfully! You are now connected.');
+    } else {
+      setError('Received invalid session after Zerodha authentication.');
+    }
     // Remove token params from URL and navigate back to root
     window.history.pushState({}, '', '/');
     setIsCallbackPage(false);
@@ -161,10 +192,14 @@ function App() {
     setLoading(true);
     try {
       const res = await api.get('/strategy/scan');
-      setRankedStocks(res.data.rankedStocks || []);
-      setSuccess(`Scan complete. Top pick: ${res.data.bestStock?.symbol || 'None'}`);
+      const data = res.data;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid scan response received');
+      }
+      setRankedStocks(data.rankedStocks || []);
+      setSuccess(`Scan complete. Top pick: ${data.bestStock?.symbol || 'None'}`);
     } catch (err) {
-      setError('Scan failed. Is Kite connected?');
+      setError(err.message || 'Scan failed. Is Kite connected?');
     }
     setLoading(false);
   };
@@ -175,14 +210,18 @@ function App() {
     setLoading(true);
     try {
       const res = await api.post('/trade/buy', { symbol: manualSymbol });
-      if (res.data.success) {
+      const data = res.data;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid buy response received');
+      }
+      if (data.success) {
         setSuccess(`Manual BUY placed for ${manualSymbol}`);
         setManualSymbol('');
       } else {
-        setError(res.data.reason || 'Buy failed');
+        setError(data.reason || 'Buy failed');
       }
     } catch (err) {
-      setError('Buy request failed');
+      setError(err.message || 'Buy request failed');
     }
     setLoading(false);
   };
