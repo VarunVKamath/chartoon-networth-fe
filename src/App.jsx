@@ -66,6 +66,8 @@ function App() {
   const [newStocksInput, setNewStocksInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [testSuccess, setTestSuccess] = useState('');
+  const [testError, setTestError] = useState('');
 
   // Fetch initial data
   const fetchInitialData = async () => {
@@ -222,6 +224,28 @@ function App() {
       }
     } catch (err) {
       setError(err.message || 'Buy request failed');
+    }
+    setLoading(false);
+  };
+
+  // Schedule Test Buy of IDEA
+  const handleScheduleIdeaBuy = async () => {
+    setLoading(true);
+    setTestSuccess('');
+    setTestError('');
+    try {
+      const res = await api.post('/test/trigger-idea-buy', { delaySeconds: 60 });
+      const data = res.data;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid response received from server');
+      }
+      if (data.success) {
+        setTestSuccess(data.message || 'Successfully scheduled IDEA buy test.');
+      } else {
+        setTestError(data.error || 'Failed to schedule IDEA buy test.');
+      }
+    } catch (err) {
+      setTestError(err.response?.data?.error || err.message || 'Request failed');
     }
     setLoading(false);
   };
@@ -459,6 +483,7 @@ function App() {
             <Tab label="Trade History & PnL" sx={customTabStyle} />
             <Tab label="Settings & Controls" sx={customTabStyle} />
             <Tab label="Safety & Compliance" sx={customTabStyle} />
+            <Tab label="Testing & Diagnostics" sx={customTabStyle} />
           </Tabs>
         </Box>
 
@@ -1169,6 +1194,119 @@ function App() {
         {/* TAB 3: SAFETY & COMPLIANCE PAGE */}
         {activeTab === 3 && (
           <ComplianceCenter />
+        )}
+
+        {/* TAB 4: TESTING & DIAGNOSTICS */}
+        {activeTab === 4 && (
+          <Paper 
+            sx={{ 
+              p: 4, 
+              border: '3px solid #1E1E1E', 
+              boxShadow: '6px 6px 0px #1E1E1E',
+              background: '#FFFFFF'
+            }}
+          >
+            <Typography variant="h4" fontFamily="Bangers" sx={{ letterSpacing: '1px', mb: 3 }}>
+              Testing & Diagnostics
+            </Typography>
+
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={8}>
+                <Card 
+                  sx={{ 
+                    border: '3px solid #1E1E1E',
+                    boxShadow: '4px 4px 0px #1E1E1E',
+                    borderRadius: '16px',
+                    p: 2
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h5" fontFamily="Bangers" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      Schedule IDEA Buy Test 🚀
+                    </Typography>
+
+                    <Typography variant="body1" fontFamily="Fredoka" sx={{ mb: 3, mt: 1 }}>
+                      This test triggers a scheduled buy order of exactly <b>1 share of IDEA</b> after a 60-second delay.
+                      It is designed to test the background order pipeline, the position monitor, stop-loss, target checking, and real-time logging.
+                    </Typography>
+
+                    <Alert 
+                      severity="warning" 
+                      sx={{ 
+                        mb: 3, 
+                        border: '2.5px solid #1E1E1E', 
+                        borderRadius: '12px',
+                        fontFamily: 'Fredoka',
+                        fontWeight: 'bold',
+                        boxShadow: '2px 2px 0px #1E1E1E'
+                      }}
+                    >
+                      WARNING: This test triggers the real order pipeline. Depending on your configuration, this may execute a paper trade OR a real exchange order with your broker.
+                    </Alert>
+
+                    {testSuccess && (
+                      <Alert 
+                        severity="success" 
+                        sx={{ 
+                          mb: 3, 
+                          border: '2px solid #1E1E1E', 
+                          borderRadius: '10px',
+                          fontFamily: 'Fredoka' 
+                        }}
+                      >
+                        {testSuccess}
+                      </Alert>
+                    )}
+
+                    {testError && (
+                      <Alert 
+                        severity="error" 
+                        sx={{ 
+                          mb: 3, 
+                          border: '2px solid #1E1E1E', 
+                          borderRadius: '10px',
+                          fontFamily: 'Fredoka' 
+                        }}
+                      >
+                        {testError}
+                      </Alert>
+                    )}
+
+                    <Button
+                      variant="contained"
+                      onClick={handleScheduleIdeaBuy}
+                      disabled={loading || !kiteConnected}
+                      sx={{
+                        fontFamily: 'Fredoka',
+                        fontWeight: 'bold',
+                        fontSize: '1.1rem',
+                        backgroundColor: '#FFD93D',
+                        color: '#1E1E1E',
+                        borderColor: '#1E1E1E',
+                        borderWidth: '3px !important',
+                        px: 4,
+                        py: 1.5,
+                        boxShadow: '4px 4px 0px #1E1E1E',
+                        textTransform: 'none',
+                        '&:hover': {
+                          backgroundColor: '#FF6B35',
+                          color: '#FFFFFF',
+                          transform: 'translate(-2px, -2px)',
+                          boxShadow: '6px 6px 0px #1E1E1E'
+                        },
+                        '&:active': {
+                          transform: 'translate(1px, 1px)',
+                          boxShadow: '1px 1px 0px #1E1E1E'
+                        }
+                      }}
+                    >
+                      Schedule IDEA Buy in 60 Seconds
+                    </Button>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          </Paper>
         )}
 
         {/* Stock Edit Dialog */}
