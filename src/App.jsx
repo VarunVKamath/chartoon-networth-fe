@@ -63,6 +63,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [manualSymbol, setManualSymbol] = useState('');
   const [showStockDialog, setShowStockDialog] = useState(false);
+  const [showModeConfirmDialog, setShowModeConfirmDialog] = useState(false);
   const [newStocksInput, setNewStocksInput] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -294,6 +295,47 @@ function App() {
     setLoading(false);
   };
 
+  // Toggle trading mode
+  const handleToggleModeClick = async () => {
+    if (tradingMode === 'REAL') {
+      // Toggle to PAPER immediately (always safe)
+      setLoading(true);
+      try {
+        const res = await api.post('/trade/mode', { mode: 'PAPER' });
+        if (res.data.success) {
+          setTradingMode('PAPER');
+          setSuccess('Switched to Paper Trading Mode (Simulation).');
+        } else {
+          setError(res.data.error || 'Failed to change mode');
+        }
+      } catch (err) {
+        setError(err.response?.data?.error || err.message || 'Failed to connect to server');
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setShowModeConfirmDialog(true);
+    }
+  };
+
+  const handleConfirmSwitchToReal = async () => {
+    setShowModeConfirmDialog(false);
+    setLoading(true);
+    try {
+      const res = await api.post('/trade/mode', { mode: 'REAL' });
+      if (res.data.success) {
+        setTradingMode('REAL');
+        setSuccess('⚠️ DANGER ZONE: Switched to REAL Trading Mode. Live orders will use real money!');
+      } else {
+        setError(res.data.error || 'Failed to change mode');
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to connect to server');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Status color helper
   const getStatusColor = (status) => {
     if (status === 'TRADE_ACTIVE') return 'success';
@@ -389,13 +431,26 @@ function App() {
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
               <Chip 
                 icon={tradingMode === 'REAL' ? <Warning sx={{ color: '#1E1E1E !important' }} /> : <TrendingUp sx={{ color: '#1E1E1E !important' }} />}
-                label={tradingMode} 
+                label={`Mode: ${tradingMode}`} 
                 color={tradingMode === 'REAL' ? 'error' : 'success'} 
+                onClick={handleToggleModeClick}
+                disabled={loading}
                 sx={{ 
                   fontWeight: 'bold', 
                   borderWidth: '2.5px',
                   borderColor: '#1E1E1E',
-                  boxShadow: '2.5px 2.5px 0px #1E1E1E'
+                  boxShadow: '2.5px 2.5px 0px #1E1E1E',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease-in-out',
+                  '&:hover': {
+                    transform: 'translate(-2px, -2px)',
+                    boxShadow: '4px 4px 0px #1E1E1E',
+                    backgroundColor: tradingMode === 'REAL' ? '#f44336' : '#4caf50'
+                  },
+                  '&:active': {
+                    transform: 'translate(1px, 1px)',
+                    boxShadow: '1px 1px 0px #1E1E1E'
+                  }
                 }}
               />
               <Chip 
@@ -1347,6 +1402,96 @@ function App() {
               }}
             >
               Save & Update
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Trading Mode Confirmation Dialog */}
+        <Dialog 
+          open={showModeConfirmDialog} 
+          onClose={() => setShowModeConfirmDialog(false)} 
+          maxWidth="xs" 
+          fullWidth
+          PaperProps={{
+            sx: {
+              border: '4px solid #1E1E1E',
+              borderRadius: '24px',
+              boxShadow: '8px 8px 0px #1E1E1E',
+              backgroundColor: '#FFF8E7'
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            fontFamily: 'Bangers', 
+            fontSize: '1.8rem', 
+            letterSpacing: '0.5px',
+            color: '#FF6B35',
+            textAlign: 'center',
+            pb: 1
+          }}>
+            ⚠️ DANGER ZONE!
+          </DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" fontFamily="Fredoka" fontWeight="bold" align="center" sx={{ color: '#1E1E1E', mb: 2 }}>
+              Are you sure you want to switch to <strong>REAL TRADING MODE</strong>?
+            </Typography>
+            <Box sx={{ 
+              bgcolor: '#FFD2D2', 
+              border: '3px solid #1E1E1E', 
+              borderRadius: '12px', 
+              p: 2, 
+              boxShadow: '3px 3px 0px #1E1E1E',
+              mb: 1
+            }}>
+              <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold" color="#D32F2F" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                🚀 This will place real market orders with real money directly on your Zerodha account!
+              </Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ p: 3, justifyContent: 'center', gap: 2 }}>
+            <Button 
+              onClick={() => setShowModeConfirmDialog(false)} 
+              variant="outlined"
+              sx={{ 
+                fontFamily: 'Fredoka',
+                fontWeight: 'bold',
+                borderWidth: '2.5px !important',
+                borderColor: '#1E1E1E',
+                color: '#1E1E1E',
+                borderRadius: '12px',
+                boxShadow: '3px 3px 0px #1E1E1E',
+                px: 3,
+                backgroundColor: '#FFFFFF',
+                '&:hover': {
+                  backgroundColor: '#E0E0E0',
+                  transform: 'translate(-1px, -1px)',
+                  boxShadow: '4px 4px 0px #1E1E1E'
+                }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmSwitchToReal} 
+              variant="contained" 
+              disabled={loading}
+              sx={{
+                fontFamily: 'Fredoka',
+                fontWeight: 'bold',
+                backgroundColor: '#FF6B35',
+                color: '#1E1E1E',
+                border: '2.5px solid #1E1E1E',
+                borderRadius: '12px',
+                boxShadow: '3px 3px 0px #1E1E1E',
+                px: 3,
+                '&:hover': {
+                  backgroundColor: '#FFD93D',
+                  transform: 'translate(-1px, -1px)',
+                  boxShadow: '4px 4px 0px #1E1E1E'
+                }
+              }}
+            >
+              Yes, Enable Real Trading
             </Button>
           </DialogActions>
         </Dialog>
