@@ -58,6 +58,8 @@ function App() {
   const [tradeHistory, setTradeHistory] = useState([]);
   const [liveLogs, setLiveLogs] = useState([]);
   const [stocksList, setStocksList] = useState([]);
+  const [startingCapital, setStartingCapital] = useState(10000);
+  const [latestScanDecision, setLatestScanDecision] = useState(null);
   
   // UI State
   const [loading, setLoading] = useState(false);
@@ -92,6 +94,8 @@ function App() {
       setDashboardStatus(statusData.status || 'WAITING_FOR_MARKET');
       setCurrentTrade(statusData.currentTrade || null);
       setTradingMode(statusData.mode || 'PAPER');
+      setStartingCapital(statusData.startingCapital || 10000);
+      setLatestScanDecision(statusData.latestScanDecision || null);
       setStocksList(stocksData.stocks || []);
       setTradeHistory(historyData.history || []);
     } catch (err) {
@@ -118,6 +122,8 @@ function App() {
         
         if (statusData && typeof statusData === 'object') {
           setDashboardStatus(statusData.status || 'WAITING_FOR_MARKET');
+          setStartingCapital(statusData.startingCapital || 10000);
+          setLatestScanDecision(statusData.latestScanDecision || null);
         }
         if (currentData && typeof currentData === 'object') {
           setCurrentTrade(currentData.trade || null);
@@ -430,27 +436,14 @@ function App() {
             
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 2 }}>
               <Chip 
-                icon={tradingMode === 'REAL' ? <Warning sx={{ color: '#1E1E1E !important' }} /> : <TrendingUp sx={{ color: '#1E1E1E !important' }} />}
-                label={`Mode: ${tradingMode}`} 
-                color={tradingMode === 'REAL' ? 'error' : 'success'} 
-                onClick={handleToggleModeClick}
-                disabled={loading}
+                icon={<TrendingUp sx={{ color: '#1E1E1E !important' }} />}
+                label="Mode: PAPER ONLY (REAL DISABLED)" 
+                color="success"
                 sx={{ 
                   fontWeight: 'bold', 
                   borderWidth: '2.5px',
                   borderColor: '#1E1E1E',
-                  boxShadow: '2.5px 2.5px 0px #1E1E1E',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease-in-out',
-                  '&:hover': {
-                    transform: 'translate(-2px, -2px)',
-                    boxShadow: '4px 4px 0px #1E1E1E',
-                    backgroundColor: tradingMode === 'REAL' ? '#f44336' : '#4caf50'
-                  },
-                  '&:active': {
-                    transform: 'translate(1px, 1px)',
-                    boxShadow: '1px 1px 0px #1E1E1E'
-                  }
+                  boxShadow: '2.5px 2.5px 0px #1E1E1E'
                 }}
               />
               <Chip 
@@ -489,6 +482,30 @@ function App() {
         </Paper>
 
         {/* Alerts (Comic banners) */}
+        <Alert 
+          severity="info"
+          icon={false}
+          sx={{ 
+            mb: 3, 
+            border: '3px solid #1E1E1E', 
+            borderRadius: '16px',
+            backgroundColor: '#FFF8E7',
+            color: '#1E1E1E',
+            boxShadow: '4px 4px 0px #FF9F43',
+            fontFamily: 'Fredoka',
+            fontWeight: 'bold',
+            textAlign: 'center',
+            '& .MuiAlert-message': { width: '100%' }
+          }}
+        >
+          <Typography variant="h6" fontFamily="Bangers" sx={{ letterSpacing: '0.5px' }}>
+            ⚠️ PAPER TRADE — NO REAL ORDER
+          </Typography>
+          <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+            Real trading is permanently disabled. Enforced for Capital Protection. Starting Simulated Capital: ₹{startingCapital.toLocaleString()}
+          </Typography>
+        </Alert>
+
         {error && (
           <Alert 
             severity="error" 
@@ -768,7 +785,7 @@ function App() {
                         boxShadow: '3px 3px 0px #1E1E1E'
                       }}>
                         <Typography variant="h4" fontFamily="Bangers" color="primary" sx={{ m: 0 }}>
-                          {currentTrade.symbol}
+                          {currentTrade.symbol} (PAPER POSITION)
                         </Typography>
                         <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
                           Entry: ₹{currentTrade.entryPrice?.toFixed(2)} | Qty: {currentTrade.quantity}
@@ -776,11 +793,14 @@ function App() {
                         <Typography variant="body2" fontFamily="Fredoka" color="text.secondary" fontWeight="bold">
                           SL: ₹{currentTrade.stopLossPrice?.toFixed(2)} • Target: ₹{currentTrade.targetPrice?.toFixed(2)}
                         </Typography>
+                        <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold" sx={{ mt: 0.5 }}>
+                          Starting Capital: ₹{startingCapital.toLocaleString()}
+                        </Typography>
                         
                         {currentTrade.currentPrice && (
                           <Box sx={{ mt: 1, borderTop: '1px dashed #1E1E1E', pt: 1 }}>
                             <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
-                              Current: ₹{currentTrade.currentPrice.toFixed(2)}
+                              Current Price: ₹{currentTrade.currentPrice.toFixed(2)}
                             </Typography>
                             <Typography 
                               variant="body2" 
@@ -788,7 +808,7 @@ function App() {
                               fontFamily="Fredoka"
                               fontWeight="bold"
                             >
-                              Unrealized PnL: ₹{currentTrade.unrealizedPnl?.toFixed(2)}
+                              Simulated PnL: ₹{currentTrade.unrealizedPnl?.toFixed(2)} ({((currentTrade.currentPrice - currentTrade.entryPrice) / currentTrade.entryPrice * 100).toFixed(2)}%)
                             </Typography>
                           </Box>
                         )}
@@ -908,6 +928,154 @@ function App() {
                   </Box>
                 </CardContent>
               </Card>
+            </Grid>
+
+            {/* Today's Setup & Munger Safeguards Card */}
+            <Grid item xs={12}>
+              <Paper sx={{ 
+                p: 3, 
+                border: '3px solid #1E1E1E', 
+                boxShadow: '6px 6px 0px #1E1E1E',
+                background: 'linear-gradient(to bottom, #FFFFFF 0%, #F5F7FB 100%)',
+                borderRadius: '16px',
+                mb: 3
+              }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h5" fontFamily="Bangers" gutterBottom>
+                      Today's Setup Analysis
+                    </Typography>
+                    <Box sx={{ p: 2, border: '2px solid #1E1E1E', borderRadius: '12px', bgcolor: '#FFFFFF', boxShadow: '3px 3px 0px #1E1E1E', height: '90%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <Typography variant="body1" fontFamily="Fredoka" fontWeight="bold">
+                        Simulation Mode: <span style={{ color: '#4D96FF' }}>PAPER TRADE — NO REAL ORDER</span>
+                      </Typography>
+                      <Typography variant="body1" fontFamily="Fredoka" fontWeight="bold" sx={{ mt: 1 }}>
+                        Starting Capital: <span style={{ color: '#1E1E1E' }}>₹{startingCapital.toLocaleString()}</span>
+                      </Typography>
+                      
+                      {currentTrade ? (
+                        <Box sx={{ mt: 2, p: 1.5, bgcolor: '#FFF8E7', borderRadius: '8px', border: '1.5px dashed #FF6B35' }}>
+                          <Typography variant="h6" fontFamily="Bangers" color="primary">
+                            Simulated Setup: {currentTrade.symbol}
+                          </Typography>
+                          <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                            Simulated Price: ₹{currentTrade.entryPrice?.toFixed(2)} | Qty: {currentTrade.quantity}
+                          </Typography>
+                          <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                            Stop Loss: ₹{currentTrade.stopLossPrice?.toFixed(2)} | Target: ₹{currentTrade.targetPrice?.toFixed(2)}
+                          </Typography>
+                          <Typography variant="body2" fontFamily="Fredoka" color="success.main" fontWeight="bold" sx={{ mt: 0.5 }}>
+                            Potential P&L: ₹{currentTrade.unrealizedPnl?.toFixed(2)} ({((currentTrade.currentPrice - currentTrade.entryPrice) / currentTrade.entryPrice * 100).toFixed(2)}%)
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ mt: 2, p: 1.5, bgcolor: '#F0F0F0', borderRadius: '8px', border: '1.5px dashed #7f8c8d' }}>
+                          <Typography variant="h6" fontFamily="Bangers" sx={{ color: '#7f8c8d' }}>
+                            Simulated Setup: NO TRADE ACTIVE
+                          </Typography>
+                          <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold" sx={{ mt: 0.5 }}>
+                            Today's Result: {tradeHistory.length > 0 && tradeHistory[0].sellTime?.startsWith(new Date().toISOString().split('T')[0]) ? (
+                              <span style={{ color: tradeHistory[0].pnl >= 0 ? '#6BCB77' : '#FF4D4D' }}>
+                                ₹{tradeHistory[0].pnl?.toFixed(2)} ({tradeHistory[0].pnlPercent?.toFixed(2)}%)
+                              </span>
+                            ) : (
+                              <span>₹0.00 simulated profit/loss (NO SETUP)</span>
+                            )}
+                          </Typography>
+                          <Typography variant="caption" fontFamily="Fredoka" color="text.secondary" sx={{ display: 'block', mt: 1, fontWeight: 'bold' }}>
+                            * Note: ₹10,000 starting capital does not guarantee 1% daily profit. Strategy executes only when setup passes all safeguards.
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h5" fontFamily="Bangers" gutterBottom>
+                      Munger Inversion Safeguards Checklist
+                    </Typography>
+                    
+                    <Box sx={{ p: 2, border: '2px solid #1E1E1E', borderRadius: '12px', bgcolor: '#FFFFFF', boxShadow: '3px 3px 0px #1E1E1E', minHeight: '90%' }}>
+                      {latestScanDecision ? (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                              1. Market Downtrend Check (Nifty 50)
+                            </Typography>
+                            <Chip 
+                              size="small"
+                              label={latestScanDecision.niftySafe ? `PASSED (${latestScanDecision.niftyChangePct?.toFixed(2)}%)` : `REJECTED (${latestScanDecision.niftyChangePct?.toFixed(2)}%)`}
+                              color={latestScanDecision.niftySafe ? 'success' : 'error'}
+                              sx={{ fontWeight: 'bold' }}
+                            />
+                          </Box>
+                          
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                            <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                              {"2. Stock Volume Check (>100k)"}
+                            </Typography>
+                            <Chip 
+                              size="small"
+                              label={latestScanDecision.hasDecentVolume ? 'PASSED' : 'REJECTED'}
+                              color={latestScanDecision.hasDecentVolume ? 'success' : 'error'}
+                              sx={{ fontWeight: 'bold' }}
+                            />
+                          </Box>
+                          
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                            <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                              3. Positive Opening Gap Check
+                            </Typography>
+                            <Chip 
+                              size="small"
+                              label={latestScanDecision.hasPositiveGap ? 'PASSED' : 'REJECTED'}
+                              color={latestScanDecision.hasPositiveGap ? 'success' : 'error'}
+                              sx={{ fontWeight: 'bold' }}
+                            />
+                          </Box>
+
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                            <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                              4. Momentum from Open Check
+                            </Typography>
+                            <Chip 
+                              size="small"
+                              label={latestScanDecision.hasPositiveMomentum ? 'PASSED' : 'REJECTED'}
+                              color={latestScanDecision.hasPositiveMomentum ? 'success' : 'error'}
+                              sx={{ fontWeight: 'bold' }}
+                            />
+                          </Box>
+
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                            <Typography variant="body2" fontFamily="Fredoka" fontWeight="bold">
+                              {"5. Strategy Score Threshold (>=65)"}
+                            </Typography>
+                            <Chip 
+                              size="small"
+                              label={latestScanDecision.shouldTrade ? `PASSED (${latestScanDecision.finalScore?.toFixed(1)})` : `REJECTED (${latestScanDecision.finalScore?.toFixed(1)})`}
+                              color={latestScanDecision.shouldTrade ? 'success' : 'error'}
+                              sx={{ fontWeight: 'bold' }}
+                            />
+                          </Box>
+                          
+                          <Typography variant="caption" fontFamily="Fredoka" fontWeight="bold" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                            Scan decision: {latestScanDecision.reason}
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 160 }}>
+                          <Typography variant="body2" fontFamily="Fredoka" color="text.secondary" fontWeight="bold">
+                            No market scan run yet today.
+                          </Typography>
+                          <Typography variant="caption" fontFamily="Fredoka" color="text.secondary">
+                            Munger safeguards will evaluate setup at 9:15 AM.
+                          </Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
             </Grid>
 
             {/* Watchlist Section / Top Ranking Table + Chart */}
