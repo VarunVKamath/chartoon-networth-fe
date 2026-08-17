@@ -1282,6 +1282,7 @@ function App() {
           <EarlyEdgeScanner
             api={api}
             apiBase={API_BASE}
+            auth={auth}
             successMsg={success}
             errorMsg={error}
           />

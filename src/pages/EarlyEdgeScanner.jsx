@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 
-export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg }) {
+export default function EarlyEdgeScanner({ api, apiBase, auth, successMsg, errorMsg }) {
   // Watchlist & Stocks
   const [watchlist, setWatchlist] = useState([]);
   const [scannerResults, setScannerResults] = useState([]);
@@ -26,6 +26,11 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
   const [simMinutes, setSimMinutes] = useState(20); // 20 mins since 9:15 = 9:35 AM
   const [interval, setInterval] = useState('1m'); // '1m' or '3m'
   const [filterMinScore, setFilterMinScore] = useState(false); // Only show >= 65
+  
+  // Operating Mode & What-If
+  const [operatingMode, setOperatingMode] = useState('TEST');
+  const [whatIfData, setWhatIfData] = useState(null);
+  const [activeWindow, setActiveWindow] = useState(true);
   
   // UI State
   const [newStockSymbol, setNewStockSymbol] = useState('');
@@ -54,6 +59,24 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
     return timeStr.substring(0, 5) + ' AM';
   };
 
+  // Check if active hours (8:45 AM - 10:15 AM IST)
+  const checkIsActiveWindow = () => {
+    if (simMode) {
+      const timeStr = getSimulatedTimeStr(simMinutes); // HH:MM:SS
+      const [h, m] = timeStr.split(':').map(Number);
+      const totalMins = h * 60 + m;
+      return totalMins >= (8 * 60 + 45) && totalMins < (10 * 60 + 15);
+    } else {
+      const now = new Date();
+      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      const istNow = new Date(utc + 5.5 * 3600000);
+      const hours = istNow.getHours();
+      const minutes = istNow.getMinutes();
+      const totalMins = hours * 60 + minutes;
+      return totalMins >= (8 * 60 + 45) && totalMins < (10 * 60 + 15);
+    }
+  };
+
   // Fetch Watchlist
   const fetchWatchlist = async () => {
     try {
@@ -64,6 +87,46 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
     } catch (err) {
       console.error(err);
       setError('Failed to fetch watchlist');
+    }
+  };
+
+  const fetchOperatingMode = async () => {
+    try {
+      const res = await api.get('/early-edge/mode');
+      if (res.data && res.data.mode) {
+        setOperatingMode(res.data.mode);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchWhatIfData = async () => {
+    try {
+      const res = await api.get('/early-edge/what-if');
+      if (res.data && res.data.whatIf) {
+        setWhatIfData(res.data.whatIf);
+      } else {
+        setWhatIfData(null);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleMode = async (newMode) => {
+    try {
+      setLoading(true);
+      setError('');
+      const res = await api.post('/early-edge/mode', { mode: newMode });
+      if (res.data && res.data.mode) {
+        setOperatingMode(res.data.mode);
+        setSuccess(`Operating mode successfully updated to ${res.data.mode === 'PROD' ? 'PROD (Max shares)' : 'TEST (1 share)'}`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to update operating mode');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -92,6 +155,9 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
           setSelectedStock(results[0]);
         }
       }
+      
+      // Also load what-if performance outcomes
+      await fetchWhatIfData();
     } catch (err) {
       console.error(err);
       setError('Scanner failed to retrieve calculations.');
@@ -128,7 +194,14 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
   // Initialize
   useEffect(() => {
     fetchWatchlist();
+    fetchOperatingMode();
+    fetchWhatIfData();
   }, []);
+
+  // Update active status
+  useEffect(() => {
+    setActiveWindow(checkIsActiveWindow());
+  }, [simMode, simMinutes]);
 
   // Run scanner when watchlist, mode, time, or interval changes
   useEffect(() => {
@@ -319,6 +392,106 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
           {success}
         </Alert>
       )}
+
+      {/* Active Hours Read-Only Indicator */}
+      {!activeWindow && (
+        <Alert 
+          severity="warning" 
+          sx={{ 
+            border: '2.5px solid #1E1E1E', 
+            borderRadius: '12px', 
+            boxShadow: '3px 3px 0px #1E1E1E', 
+            fontFamily: 'Fredoka', 
+            fontWeight: 'bold',
+            bgcolor: '#FFF8E7'
+          }}
+        >
+          🔒 READ-ONLY MODE ACTIVE: The trading system is only active between 8:45 AM and 10:15 AM IST. Current time is outside this window. Strategy scans, live calculations, and order placements are disabled. Displaying last cached scanner results and trade historical records.
+        </Alert>
+      )}
+
+      {/* Connection & Sizing Mode Card Panel */}
+      <Paper
+        sx={{
+          p: 2.5,
+          border: '3px solid #1E1E1E',
+          borderRadius: '16px',
+          boxShadow: '4px 4px 0px #1E1E1E',
+          backgroundColor: '#FFFFFF'
+        }}
+      >
+        <Grid container spacing={2} alignItems="center" justifyContent="space-between">
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography fontFamily="Fredoka" fontWeight="bold" variant="body1">
+                Kite Connection:
+              </Typography>
+              {auth?.connected ? (
+                <Chip 
+                  label={`Connected (${auth.userId})`} 
+                  color="success" 
+                  size="small" 
+                  sx={{ border: '2px solid #1E1E1E', fontWeight: 'bold' }} 
+                />
+              ) : (
+                <Chip 
+                  label="Disconnected" 
+                  color="error" 
+                  size="small" 
+                  sx={{ border: '2px solid #1E1E1E', fontWeight: 'bold' }} 
+                />
+              )}
+              {!auth?.connected && (
+                <Typography variant="caption" color="error.main" fontWeight="bold">
+                  (Order execution requires manual connection in Settings tab)
+                </Typography>
+              )}
+            </Box>
+          </Grid>
+          <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography fontFamily="Fredoka" fontWeight="bold" variant="body1">
+                Operating Mode:
+              </Typography>
+              <Button
+                size="small"
+                variant="contained"
+                onClick={() => handleToggleMode(operatingMode === 'TEST' ? 'PROD' : 'TEST')}
+                disabled={loading}
+                sx={{
+                  backgroundColor: operatingMode === 'PROD' ? '#FF4D4D' : '#6BCB77',
+                  color: '#FFFFFF',
+                  border: '2px solid #1E1E1E',
+                  fontWeight: 'bold',
+                  fontFamily: 'Fredoka',
+                  boxShadow: '2.5px 2.5px 0px #1E1E1E',
+                  '&:hover': {
+                    backgroundColor: operatingMode === 'PROD' ? '#E63939' : '#57B062',
+                  }
+                }}
+              >
+                {operatingMode === 'PROD' ? 'PROD MODE (Max whole qty)' : 'TEST MODE (Buy 1 share)'}
+              </Button>
+            </Box>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {/* SEBI Compliance Regulatory Disclosure Notice */}
+      <Alert
+        severity="info"
+        sx={{
+          border: '2.5px solid #1E1E1E',
+          borderRadius: '12px',
+          boxShadow: '3px 3px 0px #1E1E1E',
+          fontFamily: 'Fredoka',
+          fontSize: '0.85rem',
+          fontWeight: '500',
+          '& .MuiAlert-message': { color: 'text.secondary' }
+        }}
+      >
+        ⚠️ <b>SEBI Regulatory & Risk Disclosure:</b> Automated intraday algorithms do not guarantee profits. Trading in equities intraday involves high market risk and could lead to complete capital loss. Users are fully responsible for setting their own risk limits and ensuring compliance with exchange rules. Zerodha session keys must be generated daily.
+      </Alert>
 
       {/* Main Layout Grid */}
       <Grid container spacing={3}>
@@ -855,6 +1028,110 @@ export default function EarlyEdgeScanner({ api, apiBase, successMsg, errorMsg })
           )}
         </Grid>
       </Grid>
+
+      {/* Post-Trade What-If Analysis Comparison Table */}
+      {whatIfData && (
+        <Paper
+          sx={{
+            p: 3,
+            border: '3px solid #1E1E1E',
+            boxShadow: '5px 5px 0px #1E1E1E',
+            background: 'linear-gradient(180deg, #FFFFFF 0%, #FFF8E7 100%)'
+          }}
+        >
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="h4" fontFamily="Bangers" sx={{ letterSpacing: '0.5px' }}>
+              📈 Post-Trade What-If Analysis
+            </Typography>
+            <Typography variant="body2" fontFamily="Fredoka" color="text.secondary" fontWeight="bold">
+              Compare the actual results of your executed position (purchased at 9:30 AM) with the hypothetical outcomes of the 2nd, 3rd, 4th, and 5th ranked assets.
+            </Typography>
+          </Box>
+
+          <TableContainer sx={{ border: '3.5px solid #1E1E1E', borderRadius: '16px', bgcolor: '#FFFFFF' }}>
+            <Table size="small">
+              <TableHead sx={{ bgcolor: '#FFF8E7' }}>
+                <TableRow>
+                  <TableCell><b>Asset Classification</b></TableCell>
+                  <TableCell><b>Symbol</b></TableCell>
+                  <TableCell align="right"><b>Quantity</b></TableCell>
+                  <TableCell align="right"><b>Entry Price</b></TableCell>
+                  <TableCell align="right"><b>Exit Price (9:45 AM)</b></TableCell>
+                  <TableCell align="right"><b>PnL (₹)</b></TableCell>
+                  <TableCell align="right"><b>Return (%)</b></TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {/* Actual trade */}
+                {whatIfData.actualTrade && (
+                  <TableRow sx={{ bgcolor: '#E2F0D9' }}>
+                    <TableCell>
+                      <Chip label="ACTUAL POSITION" color="success" size="small" sx={{ border: '1.5px solid #1E1E1E', fontWeight: 'bold' }} />
+                    </TableCell>
+                    <TableCell><b>{whatIfData.actualTrade.symbol}</b></TableCell>
+                    <TableCell align="right">{whatIfData.actualTrade.quantity}</TableCell>
+                    <TableCell align="right">₹{whatIfData.actualTrade.entryPrice?.toFixed(2)}</TableCell>
+                    <TableCell align="right">
+                      {whatIfData.actualTrade.exitPrice ? `₹${whatIfData.actualTrade.exitPrice.toFixed(2)}` : 'Active / Monitoring'}
+                    </TableCell>
+                    <TableCell 
+                      align="right" 
+                      sx={{ 
+                        color: (whatIfData.actualTrade.pnl || 0) >= 0 ? '#6BCB77 !important' : '#FF4D4D !important',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {whatIfData.actualTrade.pnl !== null ? `₹${whatIfData.actualTrade.pnl.toFixed(2)}` : 'Active'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      sx={{ 
+                        color: (whatIfData.actualTrade.pnlPercent || 0) >= 0 ? '#6BCB77 !important' : '#FF4D4D !important',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {whatIfData.actualTrade.pnlPercent !== null ? `${whatIfData.actualTrade.pnlPercent.toFixed(2)}%` : 'Active'}
+                    </TableCell>
+                  </TableRow>
+                )}
+
+                {/* Hypothetical candidates */}
+                {whatIfData.hypotheticalTrades && whatIfData.hypotheticalTrades.map((cand, idx) => (
+                  <TableRow key={idx}>
+                    <TableCell>
+                      <Chip label={`Rank #${idx + 2} Candidate`} variant="outlined" size="small" sx={{ border: '1.5px solid #1E1E1E', fontWeight: 'bold' }} />
+                    </TableCell>
+                    <TableCell><b>{cand.symbol}</b></TableCell>
+                    <TableCell align="right">{cand.quantity}</TableCell>
+                    <TableCell align="right">₹{cand.entryPrice?.toFixed(2)}</TableCell>
+                    <TableCell align="right">
+                      {cand.exitPrice ? `₹${cand.exitPrice.toFixed(2)}` : 'Awaiting Exit Time (9:45)'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      sx={{ 
+                        color: (cand.pnl || 0) >= 0 ? '#6BCB77 !important' : '#FF4D4D !important',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {cand.pnl !== null ? `₹${cand.pnl.toFixed(2)}` : 'Pending'}
+                    </TableCell>
+                    <TableCell 
+                      align="right"
+                      sx={{ 
+                        color: (cand.pnlPercent || 0) >= 0 ? '#6BCB77 !important' : '#FF4D4D !important',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {cand.pnlPercent !== null ? `${cand.pnlPercent.toFixed(2)}%` : 'Pending'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
     </Box>
   );
 }
