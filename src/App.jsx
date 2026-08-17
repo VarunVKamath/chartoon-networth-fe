@@ -17,8 +17,10 @@ import {
 import ZerodhaSettings from './pages/ZerodhaSettings';
 import AuthCallback from './pages/AuthCallback';
 import ComplianceCenter from './pages/compliance/ComplianceCenter';
+import EarlyEdgeScanner from './pages/EarlyEdgeScanner';
 import { authService } from './services/authService';
 import CaptainMascot from './components/CaptainMascot';
+import { io } from 'socket.io-client';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'; // Configurable URL for production / local fallback
 
@@ -176,6 +178,25 @@ function App() {
 
   useEffect(() => {
     checkKiteStatus();
+  }, []);
+
+  // Connect to WebSocket server
+  useEffect(() => {
+    const socketHost = API_BASE === '/api' ? window.location.origin : API_BASE;
+    const socket = io(socketHost, {
+      withCredentials: true
+    });
+    
+    window.socket = socket;
+    
+    socket.on('connect', () => {
+      console.log('Socket.io connected to server');
+    });
+
+    return () => {
+      socket.disconnect();
+      window.socket = null;
+    };
   }, []);
 
   const handleAuthSuccess = (session) => {
@@ -552,6 +573,7 @@ function App() {
             }}
           >
             <Tab label="Live Dashboard" sx={customTabStyle} />
+            <Tab label="Early Edge Scanner" sx={customTabStyle} />
             <Tab label="Trade History & PnL" sx={customTabStyle} />
             <Tab label="Settings & Controls" sx={customTabStyle} />
             <Tab label="Safety & Compliance" sx={customTabStyle} />
@@ -1255,8 +1277,18 @@ function App() {
           </Grid>
         )}
 
-        {/* TAB 1: HISTORY (Orders page style) */}
+        {/* TAB 1: EARLY EDGE SCANNER */}
         {activeTab === 1 && (
+          <EarlyEdgeScanner
+            api={api}
+            apiBase={API_BASE}
+            successMsg={success}
+            errorMsg={error}
+          />
+        )}
+
+        {/* TAB 2: HISTORY (Orders page style) */}
+        {activeTab === 2 && (
           <Paper sx={{ p: 3, border: '3px solid #1E1E1E', boxShadow: '6px 6px 0px #1E1E1E' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
               <Typography variant="h4" fontFamily="Bangers" sx={{ letterSpacing: '1px' }}>
@@ -1340,8 +1372,8 @@ function App() {
           </Paper>
         )}
 
-        {/* TAB 2: SETTINGS */}
-        {activeTab === 2 && (
+        {/* TAB 3: SETTINGS */}
+        {activeTab === 3 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {/* Zerodha Connection Settings Card */}
             <ZerodhaSettings auth={auth} setAuth={setAuth} onRefresh={checkKiteStatus} />
@@ -1414,13 +1446,13 @@ function App() {
           </Box>
         )}
 
-        {/* TAB 3: SAFETY & COMPLIANCE PAGE */}
-        {activeTab === 3 && (
+        {/* TAB 4: SAFETY & COMPLIANCE PAGE */}
+        {activeTab === 4 && (
           <ComplianceCenter />
         )}
 
-        {/* TAB 4: TESTING & DIAGNOSTICS */}
-        {activeTab === 4 && (
+        {/* TAB 5: TESTING & DIAGNOSTICS */}
+        {activeTab === 5 && (
           <Paper 
             sx={{ 
               p: 4, 
